@@ -70,10 +70,17 @@ Log.CloseAndFlush();
 
 ```mermaid
 flowchart TD
-    A[Emit()] --> B[ProcessBatchAsync]
-    B -->|WaitAsync() → Release()| B
-    B --> C[PeriodicBatchProcessing (Timer)]
-    C --> B
-    B --> D[DisposeAsync()]
-    D -->|Cancel + Flush pending logs| E[Release resources]
-    E -->|Dispose| F[_batchSemaphore.Dispose()]
+
+    subgraph Normal Operation
+        A[Emit] -->|Enqueue or Send Immediately| B[ProcessBatchAsync]
+        B -->|Sequential Send| C[UDP Client]
+        D[PeriodicBatchProcessing Timer] --> B
+    end
+
+    subgraph Disposal
+        E[DisposeAsync] -->|Cancel background tasks| F[Stop Periodic Timer]
+        E -->|Flush pending logs with timeout| B
+        E -->|Wait for semaphore with timeout| G[BatchSemaphore]
+        E -->|Dispose resources| H[UdpClient + Semaphore + CTS]
+        I[Dispose] -->|Calls DisposeAsync synchronously| E
+    end
