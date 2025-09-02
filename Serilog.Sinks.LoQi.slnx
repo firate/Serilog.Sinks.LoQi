@@ -1,0 +1,10 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/Serilog.Sinks.LoQi/Serilog.Sinks.LoQi.csproj" />
+  </Folder>
+</Solution>
