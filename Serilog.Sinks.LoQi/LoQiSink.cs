@@ -209,7 +209,7 @@ public sealed class LoQiSink : ILogEventSink, IDisposable
         // Include exception details if present
         if (logEvent.Exception != null)
         {
-            message += Environment.NewLine + logEvent.Exception.ToString();
+            message += Environment.NewLine + logEvent?.Exception?.ToString();
         }
 
         return message;
@@ -278,7 +278,7 @@ public sealed class LoQiSink : ILogEventSink, IDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
+    private async ValueTask DisposeAsync()
     {
         lock (_disposeLock)
         {
@@ -311,7 +311,7 @@ public sealed class LoQiSink : ILogEventSink, IDisposable
             // Batch semaforunun tamamlanmasını bekle (3 saniye timeout)
             try
             {
-                if (_batchSemaphore != null)
+                if (_batchSemaphore is not null)
                 {
                     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
                     await _batchSemaphore.WaitAsync(cts.Token);
