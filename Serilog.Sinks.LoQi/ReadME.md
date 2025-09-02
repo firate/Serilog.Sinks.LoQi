@@ -65,3 +65,15 @@ Log.CloseAndFlush();
     }
 }
 ```
+
+### LoQi.Sink Lifecycle
+
+```mermaid
+flowchart TD
+    A[Emit()] --> B[ProcessBatchAsync]
+    B -->|WaitAsync() → Release()| B
+    B --> C[PeriodicBatchProcessing (Timer)]
+    C --> B
+    B --> D[DisposeAsync()]
+    D -->|Cancel + Flush pending logs| E[Release resources]
+    E -->|Dispose| F[_batchSemaphore.Dispose()]
