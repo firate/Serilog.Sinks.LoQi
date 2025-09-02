@@ -115,7 +115,7 @@ public sealed class LoQiSink : ILogEventSink, IDisposable
         }
     }
 
-    private async Task ProcessBatchAsync()
+    private async Task ProcessBatchAsync(CancellationToken cancellationToken = default)
     {
         // Skip if disposed or no pending logs
         bool shouldSkip;
@@ -278,32 +278,27 @@ public sealed class LoQiSink : ILogEventSink, IDisposable
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        // Thread-safe disposal with simple lock
         lock (_disposeLock)
         {
             if (_isDisposed)
-            {
-                // Already disposed by another thread
                 return;
-            }
+
             _isDisposed = true;
         }
 
         try
         {
-            // Cancel periodic processing first
             _cancellationTokenSource?.Cancel();
 
-            // Process any remaining logs in batch mode
+            // Kalan batch’i gönder (2 saniye timeout)
             if (_options.EnableBatching && !_pendingLogs.IsEmpty)
             {
                 try
                 {
-                    // Final batch processing without cancellation token
-                    var task = ProcessBatchAsync();
-                    task.Wait(TimeSpan.FromSeconds(2)); // Max 2 seconds for final batch
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    await ProcessBatchAsync(cts.Token);
                 }
                 catch (Exception ex)
                 {
@@ -311,20 +306,22 @@ public sealed class LoQiSink : ILogEventSink, IDisposable
                 }
             }
 
-            // Stop the periodic timer
             _periodicTimer?.Dispose();
-            
-            // Wait for current batch to complete (max 3 seconds)
+
+            // Batch semaforunun tamamlanmasını bekle (3 saniye timeout)
             try
             {
-                _batchSemaphore?.Wait(3000);
+                if (_batchSemaphore != null)
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                    await _batchSemaphore.WaitAsync(cts.Token);
+                }
             }
             catch (Exception ex)
             {
                 LogError($"Error waiting for batch completion: {ex.Message}");
             }
-            
-            // Dispose UDP client
+
             _udpClient?.Dispose();
         }
         catch (Exception ex)
@@ -333,10 +330,15 @@ public sealed class LoQiSink : ILogEventSink, IDisposable
         }
         finally
         {
-            // Always dispose resources
             _batchSemaphore?.Dispose();
             _cancellationTokenSource?.Dispose();
         }
+    }
+
+    // Eğer Serilog sink kontratı gereği IDisposable zorunlu ise:
+    public void Dispose()
+    {
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 
     private static void LogError(string message)
